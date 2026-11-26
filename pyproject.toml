@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "migratarr"
+version = "0.1.0"
+description = "Read-only assessment for whole-server Linux migrations"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+migratarr = "migratarr.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
