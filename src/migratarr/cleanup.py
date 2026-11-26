@@ -27,7 +27,7 @@ def mounted_paths(root):
     return sorted(set(paths))
 
 
-def snapshot(token, job, source):
+def snapshot(token, job, source, for_copy=False):
     # Substitute only the guard nonce; paths and inspection code remain fixed.
     target = _directory(Path(TARGET_BASE) / job["job_id"] / "data" / CASE)
     if target.stat().st_dev != os.stat("/target").st_dev:
@@ -56,11 +56,16 @@ print(json.dumps({'entries':scan_paths(str(case),selected),
                      "mount_boundaries": boundaries}], boundaries)
     destination = scan_paths(str(target), local_mounts)
     choices = cleanup_candidates(remote["entries"], destination, policy)
+    copy_details = {}
+    if for_copy:
+        from .policy_copy import copy_filters, validate_copy_paths
+        validate_copy_paths(remote["entries"], destination, policy)
+        copy_details["copy_exclusions"] = copy_filters(policy, [path[len(str(target)):] for path in local_mounts])
     blocked = bool(choices["source_collisions"] or choices["type_conflicts"] or choices["hardlink_conflicts"])
     return {"schema_version": 1, "scope": "vm_root_policy_sandbox", "job_id": job["job_id"],
             "migration_ready": False, "status": "blocked" if blocked else "preview_ready",
             "source_fingerprint": remote["fingerprint"], "destination_fingerprint": evidence_hash(destination),
-            "path_policy": policy, "destination_mounts": local_mounts, **choices}
+            "path_policy": policy, "destination_mounts": local_mounts, **choices, **copy_details}
 
 
 def preview_cleanup(token):

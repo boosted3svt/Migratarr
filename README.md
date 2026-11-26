@@ -31,6 +31,8 @@ connectivity, source changes during copying and destination space exhaustion.
 Draft plans also contain a [whole-system path policy](docs/ROOT_PATH_POLICY.md).
 Its VM-only cleanup prototype applies an exact, revalidated preview inside a
 bounded root-shaped sandbox; whole-root replacement and deletion remain disabled.
+The fixture transfer can also apply that policy during copying, retaining
+protected boot/recovery, network and identity paths before exact-preview cleanup.
 Every assessment and recovery job returns `migration_ready: false`.
 No actual migration combination is qualified yet.
 

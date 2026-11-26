@@ -87,7 +87,7 @@ def ssh_arguments(source):
                   "-o", "ControlPath=none", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2"]
 
 
-def rsync_arguments(source, destination, token, mounts, bandwidth=0):
+def rsync_arguments(source, destination, token, mounts, bandwidth=0, policy_exclusions=()):
     if type(bandwidth) is not int or not 0 <= bandwidth <= 1048576:
         raise ValueError("invalid fixture bandwidth limit")
     host, ssh = ssh_arguments(source)
@@ -96,7 +96,7 @@ def rsync_arguments(source, destination, token, mounts, bandwidth=0):
             "--checksum", "--sparse", "--fsync", "--partial-dir=.migratarr-partial",
             "--timeout=30", "--protect-args", "--temp-dir=" + str(Path(destination).parent / "scratch"), "--rsync-path=" + remote,
             "-e", " ".join(shlex.quote(value) for value in ssh)]
-    for pattern in mount_exclusions(mounts):
+    for pattern in mount_exclusions(mounts) + list(policy_exclusions):
         argv.extend(["--exclude", pattern])
     argv.extend(["--exclude", "/.migratarr-partial/***"])
     if bandwidth:
@@ -174,7 +174,9 @@ def failure_reason(code, diagnostic):
     return "transfer_error"
 
 
-def transfer_fixture(token, bandwidth=0):
+def transfer_fixture(token, bandwidth=0, root_policy=False):
+    if type(root_policy) is not bool:
+        raise ValueError("invalid policy fixture selection")
     job_path, job, source = fixture_context(token)
     host, ssh = ssh_arguments(source)
     probe = subprocess.run(ssh + ["--", host, "python3 -I -B -c " + shlex.quote(source_guard(token))], capture_output=True, text=True, timeout=30)
@@ -200,9 +202,17 @@ def transfer_fixture(token, bandwidth=0):
         for line in Path("/proc/self/mountinfo").read_text().splitlines():
             mount = line.split(" - ", 1)[0].split()[4]
             if mount == str(run) or mount.startswith(str(run) + "/"):
-                raise ValueError("nested fixture destination mounts are unsupported")
-        argv = rsync_arguments(source, data, token, mounts, bandwidth)
-        checkpoint = job_path / "transfer.json"
+                if not root_policy or not mount.startswith(str(data / "policy-case") + "/"):
+                    raise ValueError("nested fixture destination mounts are unsupported")
+        policy = None
+        if root_policy:
+            from .cleanup import snapshot
+            policy = snapshot(token, job, source, for_copy=True)
+            if policy["status"] != "preview_ready":
+                raise ValueError("policy copy is blocked by source collisions or destination conflicts")
+        argv = rsync_arguments(source, data, token, mounts, bandwidth,
+                               policy["copy_exclusions"] if policy else ())
+        checkpoint = job_path / ("policy-transfer.json" if root_policy else "transfer.json")
         previous = _json(checkpoint) if checkpoint.exists() else None
         if previous is not None and (not isinstance(previous, dict) or previous.get("schema_version") != 1 or previous.get("job_id") != job["job_id"] or previous.get("migration_ready") is not False or type(previous.get("attempt")) is not int or previous["attempt"] < 1 or previous.get("phase") not in ("copying", "interrupted", "failed", "complete")):
             raise ValueError("invalid fixture transfer checkpoint")
@@ -212,6 +222,9 @@ def transfer_fixture(token, bandwidth=0):
                   "previous_phase": previous["phase"] if previous else None,
                   "destination": str(data), "exclusions": mount_exclusions(mounts), "updated_at": _now(),
                   "source_fingerprint_before": evidence["fingerprint"], "checkpoint_reserve_released": False}
+        if policy:
+            report.update(scope="vm_root_policy_fixture_only", path_policy=policy["path_policy"],
+                          policy_exclusions=policy["copy_exclusions"])
         report["discarded_temporary_files"] = clean_scratch(scratch)
         reserve = job_path / ".transfer-checkpoint-reserve"
         if reserve.exists():

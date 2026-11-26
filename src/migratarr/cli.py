@@ -69,6 +69,7 @@ def main(argv=None):
     transfer = recovery_commands.add_parser("transfer-fixture", help="Disposable QEMU guests only: bounded fixture copy onto the mounted target disk")
     transfer.add_argument("--vm-token", required=True)
     transfer.add_argument("--bwlimit", type=int, default=0, help="Fixture test rate limit in KiB/s; zero is unlimited")
+    transfer.add_argument("--root-policy", action="store_true", help="Apply root policy inside the fixed policy-case fixture; requires a seeded sandbox")
     for name in ("cleanup-preview-vm", "cleanup-apply-vm"):
         cleanup = recovery_commands.add_parser(name, help="Disposable VMs only: exact-preview cleanup inside the bounded policy sandbox")
         cleanup.add_argument("--vm-token", required=True)
@@ -133,7 +134,7 @@ def main(argv=None):
             elif args.recovery_command == "check-source":
                 result = check_source(args.runtime_dir)
             elif args.recovery_command == "transfer-fixture":
-                result = transfer_fixture(args.vm_token, args.bwlimit)
+                result = transfer_fixture(args.vm_token, args.bwlimit, root_policy=args.root_policy)
             elif args.recovery_command == "cleanup-preview-vm":
                 result = preview_cleanup(args.vm_token)
             elif args.recovery_command == "cleanup-apply-vm":

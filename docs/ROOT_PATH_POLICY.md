@@ -27,6 +27,47 @@ updates or a second staged installation. The bounded transfer fixture now uses
 per-file temporary writes and an initial conservative headroom check. A full-server capacity
 and cleanup schedule is not qualified by this policy alone.
 
+## Policy-aware copy integration
+
+The bounded fixture transfer can now apply the same root policy before copying:
+
+```sh
+python3 /opt/migratarr.pyz recovery transfer-fixture --root-policy --vm-token VM_TEST_NONCE
+```
+
+This requires a seeded `policy-case` directory inside the existing fixed fixture
+target. It does not select a different source or permit copying onto `/target`
+itself. Before rsync starts, the application obtains fresh source/destination
+namespace evidence, rejects recovery namespace collisions and type conflicts,
+and compiles anchored exclusions for protected and reconciled paths. Mounted
+destination directories are excluded entirely, preserving their metadata as
+well as their contents; source-only excluded mountpoints retain placeholders.
+Ordinary local application, home and temporary-directory data remain included.
+
+Symlink or non-directory ancestors of protected paths are refused. Managed
+destination files with hard links outside the managed set are also refused,
+preventing shared metadata from changing protected or external data. Special
+files in managed paths are unsupported by this fixture. Policy-copy attempts
+use their own `policy-transfer.json`, with applied rules and the space budget.
+The existing numeric-ID, ACL, xattr, hard-link, sparse-file and interruption
+mechanisms are reused. Rsync does not delete destination files; exact-preview
+cleanup remains a separate step.
+
+Run one combined development rehearsal with `scripts/test_policy_copy_vm.py`
+and the same image/kernel arguments as below. It copies the root-shaped data,
+checks retained configuration and mounted data, applies exact-preview cleanup,
+repeats the copy and verifies persistence through RAM restart and disk boot.
+This is a bounded integration milestone, not a whole-OS replacement or boot
+reconciliation qualification. Concurrent destination mutation remains outside
+the supported fixture contract.
+
+The combined policy-copy rehearsal passed on 2026-11-26:
+`reports/policy-copy-vm-xlyapz4b/result.json`. It preserved the metadata fixture,
+retained reconciliation files and mounted data, removed exactly eight previewed
+entries, repeated the copy successfully, and retained protections after RAM
+restart and disk Ubuntu boot. GPT, EFI contents and root UUID were unchanged.
+All 173 automated tests passed under Python 3.8.10 and Python 3.12.
+
 ## Disposable VM test
 
 Run with the verified cloud image and kernel/module inputs described in the

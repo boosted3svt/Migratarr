@@ -199,6 +199,19 @@ fixture does not qualify full-root transfer or deletion. Full writer discovery a
 the actual Ubuntu 20.04/ext3 boot adaptation remain outstanding; this rehearsal
 does not qualify copying or physical installation.
 
+The intermediate policy-copy integration now applies the root rules during
+bounded fixture transfer, then uses the same policy for exact-preview cleanup.
+It protects boot/recovery and reconciliation paths, excludes mounted data,
+rejects redirected ancestors and external hard links, and records separate
+policy-transfer checkpoints. A repeat-copy rehearsal exercises preservation
+after cleanup. This closes the gap between policy drafting and fixture copying;
+full-root replacement, continuous headroom enforcement and imported-OS boot
+remain subsequent gates.
+The combined integration rehearsal passed (`reports/policy-copy-vm-xlyapz4b/result.json`):
+copy, eight exact-preview removals, repeat copy, RAM restart and disk boot, with
+unchanged GPT/EFI/root UUID. All 173 automated tests passed under Python 3.8.10
+and Python 3.12.
+
 Use disposable source and destination VMs; the destination must have only one
 disk. Demonstrate automatic process startup after reboot, network reconnection,
 durable job loading, RAM/driver availability, log access and a tested fallback.
