@@ -1,5 +1,8 @@
 # Migratarr
 
+For a new chat or a fresh machine, read [START_HERE.md](START_HERE.md) for the
+latest development checkpoint and recovery instructions.
+
 Migratarr is a separate project for migrating an entire Linux installation to
 new hardware while retaining the destination's existing partitions and
 filesystems. It is intended to preserve the source's operating system, users, application
