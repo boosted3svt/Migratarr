@@ -34,8 +34,13 @@ def owned_directory(path):
     for directory in reversed(missing):
         directory.mkdir(mode=0o755)
     info = path.lstat()
-    if path.resolve() != path or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
-        raise ValueError("installation directories must be owned, non-writable by others, and free of symlink parents")
+    if path.resolve() != path or not stat.S_ISDIR(info.st_mode):
+        raise ValueError("installation directory must be a directory without symlink parents: " + str(path))
+    if info.st_uid != os.geteuid():
+        raise ValueError("installation directory must be owned by the current user: " + str(path))
+    if info.st_mode & 0o022:
+        raise ValueError("installation directory is writable by group or others: " + str(path) +
+                         ". To secure this directory only, run: chmod go-w -- " + shlex.quote(str(path)))
 
 
 def _install_unlocked(prefix):
