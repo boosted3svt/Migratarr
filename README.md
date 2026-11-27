@@ -1,5 +1,12 @@
 # Migratarr
 
+Starting after a reinstall or in a new chat? Read [START_HERE.md](START_HERE.md).
+
+Development checkpoint (`wip/os-interruption-recovery`): unfinished interruption
+recovery work is saved on this branch. Read [the session handoff](docs/SESSION_HANDOFF.md)
+before continuing. The new path has passed unit tests but has not had its VM
+interruption rehearsal; `main` remains the last tested milestone.
+
 Migratarr is a separate project for migrating an entire Linux installation to
 new hardware while retaining the destination's existing partitions and
 filesystems. It is intended to preserve the source's operating system, users, application

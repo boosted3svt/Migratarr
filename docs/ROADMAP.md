@@ -1,5 +1,11 @@
 # Implementation and qualification gates
 
+Development checkpoint: the `wip/os-interruption-recovery` branch contains
+unfinished schema-2 cleanup/copy resume and atomic boot reconciliation. Read
+[the current session handoff](SESSION_HANDOFF.md) before continuing. Unit tests
+pass; the combined interruption VM rehearsal is still pending. This does not
+change the completed milestones or production qualification below.
+
 The deliverable is a standalone script/application, with no LLM runtime or
 operator-chat dependency. Runtime discovery, unsupported-case decisions, planning,
 checkpoints and eventual execution must be implemented as deterministic program

@@ -2,6 +2,9 @@
 
 Date: 2026-11-26
 
+For current development state and tomorrow's next steps, read
+[SESSION_HANDOFF.md](SESSION_HANDOFF.md) first. This file is historical requirements.
+
 Historical requirements handoff. Implementation has since progressed; see the
 [current roadmap](ROADMAP.md) and [installation instructions](INSTALLATION.md)
 for current capabilities. The original proposed design below is not a statement

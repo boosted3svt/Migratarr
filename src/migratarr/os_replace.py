@@ -166,15 +166,18 @@ def scope_filters(scope):
     return [p[len('/boot'):] for p in paths if p.startswith('/boot/')]
 
 
-def copy_arguments(source, nonce, scope, scratch):
+def copy_arguments(source, nonce, scope, scratch, bandwidth=0):
+    if type(bandwidth) is not int or not 0 <= bandwidth <= 1048576:
+        raise ValueError('invalid VM transfer bandwidth limit')
     host, ssh = ssh_arguments(source)
     remote = 'python3 -I -B -c ' + shlex.quote(source_code(nonce, scope))
     relative = '' if scope == 'root' else 'boot/'
     args = ['rsync', '--archive', '--hard-links', '--acls', '--xattrs', '--numeric-ids', '--one-file-system',
-            '--checksum', '--sparse', '--fsync', '--timeout=60', '--protect-args',
+            '--checksum', '--sparse', '--timeout=60', '--protect-args',
             '--temp-dir=' + str(scratch), '--rsync-path=' + remote, '-e', shlex.join(ssh)]
     for pattern in scope_filters(scope):
         args.extend(['--exclude', pattern])
+    if bandwidth: args.append('--bwlimit=' + str(bandwidth))
     args.extend(['--', host + ':/source/' + relative, '/target/' + relative])
     return args
 
@@ -200,8 +203,8 @@ def verify_scope(source, nonce, scope, scratch):
         raise PayloadMismatch('copied OS differs from the frozen source: ' + repr(differences[:8]))
 
 
-def copy_scope(source, nonce, scope, scratch, log):
-    args = copy_arguments(source, nonce, scope, scratch)
+def copy_scope(source, nonce, scope, scratch, log, bandwidth=0):
+    args = copy_arguments(source, nonce, scope, scratch, bandwidth)
     with log.open('ab') as errors:
         process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=errors, start_new_session=True)
     try:
@@ -247,48 +250,15 @@ menuentry 'Migratarr RAM recovery' {
 
 
 def reconcile(job, kernels, journal):
-    boot_uuid = subprocess.check_output(['blkid', '-s', 'UUID', '-o', 'value', '/dev/vda16'], text=True).strip()
-    if boot_uuid != job['assets']['boot_uuid']:
-        raise ValueError('destination boot UUID differs from the prepared recovery job')
-    efi_uuid = subprocess.check_output(['blkid', '-s', 'UUID', '-o', 'value', '/dev/vda15'], text=True).strip()
-    fstab = 'UUID={} / ext4 defaults 0 1\nUUID={} /boot ext4 defaults 0 2\nUUID={} /boot/efi vfat umask=0077 0 1\n'.format(job['target_uuid'], boot_uuid, efi_uuid)
-    Path('/target/etc/fstab').write_text(fstab)
-    Path('/target/etc/crypttab').write_text('')
-    resume = Path('/target/etc/initramfs-tools/conf.d/resume')
-    resume.parent.mkdir(parents=True, exist_ok=True); resume.write_text('RESUME=none\n')
-    Path('/target/etc/cloud/cloud-init.disabled').touch()
-    # The imported OS clears the boot-attempt flag only after multi-user startup.
-    service = Path('/target/etc/systemd/system/migratarr-os-boot-success.service')
-    service.write_text('[Unit]\nAfter=network.target\n[Service]\nType=oneshot\nExecStart=/usr/bin/grub-editenv /boot/grub/grubenv unset migratarr_os_attempted\n[Install]\nWantedBy=multi-user.target\n')
-    wants = service.parent / 'multi-user.target.wants'
-    wants.mkdir(exist_ok=True)
-    link = wants / service.name
-    if link.is_symlink(): link.unlink()
-    link.symlink_to('../' + service.name)
-    kernel = sorted(kernels, key=lambda v: [int(p) if p.isdigit() else p for p in re.split(r'(\d+)', v)])[-1]
-    mounted = []
-    try:
-        for path in ('dev', 'proc', 'sys'):
-            subprocess.run(['mount', '--bind', '/' + path, '/target/' + path], check=True, timeout=30)
-            mounted.append('/target/' + path)
-        with journal.open('ab') as log:
-            chroot = ['chroot'] if shutil.which('chroot') else ['/bin/busybox', 'chroot']
-            subprocess.run(chroot + ['/target', '/usr/sbin/update-initramfs', '-u', '-k', kernel],
-                           check=True, stdout=log, stderr=log, timeout=600)
-    finally:
-        for mount in reversed(mounted):
-            subprocess.run(['umount', mount], check=True, timeout=30)
-    config = Path('/target/boot/grub/grub.cfg')
-    config.write_text(grub_config(kernel, job['target_uuid'], boot_uuid, job['job_id']))
-    subprocess.run(['grub-editenv', '/target/boot/grub/grubenv', 'unset', 'migratarr_os_attempted', 'migratarr_job', 'migratarr_attempted'], check=True, timeout=30)
-    return {'kernel': kernel, 'boot_uuid': boot_uuid, 'efi_uuid': efi_uuid,
-            'retained': ['UEFI binaries', 'management networking', 'SSH access', 'destination machine-id'],
-            'adapted': ['fstab', 'resume', 'initramfs', 'GRUB menu', 'cloud-init disabled']}
+    from .os_boot import reconcile_boot
+    return reconcile_boot(job, kernels, journal)
 
 
 def reconcile_os(token, preview_sha256):
     """Verify already copied payloads before retrying boot reconciliation only."""
     path, job, source = context(token)
+    if _json(path / 'os-transfer.json').get('schema_version') == 2:
+        return resume_os(token, preview_sha256)
     with _locked(path):
         data = _read(path / 'os-preview.z', 64 * 1024 * 1024)
         if _fingerprint(data) != preview_sha256:
@@ -338,55 +308,11 @@ def reconcile_os(token, preview_sha256):
             raise
 
 
-def replace_os(token, preview_sha256):
-    path, job, source = context(token)
-    if not re.fullmatch(r'[a-f0-9]{64}', preview_sha256):
-        raise ValueError("exact OS preview digest required")
-    with _locked(path):
-        data = _read(path / 'os-preview.z', 64 * 1024 * 1024)
-        if _fingerprint(data) != preview_sha256:
-            raise ValueError("OS preview digest differs")
-        decoder = zlib.decompressobj()
-        decoded = decoder.decompress(data, 128 * 1024 * 1024 + 1)
-        if len(decoded) > 128 * 1024 * 1024 or not decoder.eof:
-            raise ValueError("invalid or oversized OS preview")
-        saved = json.loads(decoded)
-        if snapshot(job, source, saved['source_nonce']) != saved:
-            raise ValueError("OS preview is stale; no deletion started")
-        state = {'phase': 'cleanup', 'migration_ready': False, 'scope': saved['scope'], 'preview_sha256': preview_sha256, 'removed': 0}
-        checkpoint = path / 'os-transfer.json'
-        log = Path('/run/migratarr/os-transfer.log')
-        _write(log, b'', replace=log.exists())
-        reserve = path / '.os-checkpoint-reserve'
-        _write(reserve, b'\0' * (16 * 1024 * 1024))
-        def save():
-            try:
-                _write_json(checkpoint, state, replace=checkpoint.exists())
-            except OSError:
-                if reserve.exists(): reserve.unlink()
-                _write_json(checkpoint, state, replace=checkpoint.exists())
-        try:
-            save()
-            for name in saved['remove']:
-                remove_entry(name, saved['destination'][name]); state['removed'] += 1
-                if state['removed'] % 250 == 0: save()
-            save()
-            for scope in ('root', 'boot'):
-                state['phase'] = 'copy_' + scope; save()
-                scratch = (path if scope == 'root' else Path('/target/boot/migratarr') / job['job_id']) / 'os-scratch'
-                scratch.mkdir(mode=0o700, exist_ok=True); _directory(scratch); clean_scratch(scratch)
-                maximum = max((r[6] for p, r in saved['source']['entries'].items() if r[0] == 'f' and p.startswith('/boot/') == (scope == 'boot')), default=0)
-                available = os.statvfs(scratch)
-                if available.f_bavail * available.f_frsize < maximum + HEADROOM:
-                    raise ValueError("insufficient temporary headroom for the largest source file")
-                copy_scope(source, saved['source_nonce'], scope, scratch, log); clean_scratch(scratch)
-            state['phase'] = 'reconcile'; save()
-            state['boot'] = reconcile(job, saved['source']['kernels'], log)
-            if release('/target/etc/os-release') != ['ubuntu', '20.04']:
-                raise ValueError("copied OS release differs from source")
-            state['phase'] = 'ready_for_vm_boot'; save()
-            subprocess.run(['sync'], check=True, timeout=60)
-            return state
-        except BaseException as exc:
-            state.update(phase='failed', error=str(exc)); save()
-            raise
+def replace_os(token, preview_sha256, bandwidth=0):
+    from .os_execute import start_os
+    return start_os(token, preview_sha256, bandwidth)
+
+
+def resume_os(token, preview_sha256, bandwidth=0):
+    from .os_execute import resume_os as execute_resume
+    return execute_resume(token, preview_sha256, bandwidth)
