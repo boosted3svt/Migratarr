@@ -227,6 +227,25 @@ extend rescue fallback coverage before implementing file deletion.
 
 ## 4. Transfer and reconciliation
 
+The first whole-OS implementation is the [cross-release VM lab](WHOLE_OS_LAB.md):
+an offline, read-only Ubuntu 20.04 source replaces an Ubuntu 24.04 destination's
+ordinary files from RAM. It uses an exact metadata preview, guarded obsolete-file
+cleanup, per-filesystem temporary writes, headroom monitoring and destination-UUID
+fstab/initramfs/GRUB reconciliation. UEFI binaries, management access and recovery
+assets are retained. This is an experimental single-layout implementation;
+whole-OS interruption/retry and production cutover remain separate gates.
+
+The cross-release whole-OS rehearsal passed on 2026-11-27. The Ubuntu 24.04
+destination was replaced with the Ubuntu 20.04 source and booted source kernel
+5.4.0-216-generic / Python 3.8. Complete account and package-database hashes,
+the metadata fixture and the SQLite-backed systemd service passed checks.
+GPT, EFI bytes and filesystem identities were retained. Evidence is
+`reports/os-replace-vm-kmwdf46c/resume-result.json`. A missing rescue command and
+copy-boundary durability issue were fixed; reconciliation-only retry verified
+the existing root payload and repaired boot files without repeating root copy.
+This qualifies the named VM happy path and recovery continuation, not physical
+migration, ext3/BIOS adaptation or arbitrary whole-OS interruption recovery.
+
 Review an explicit local filesystem allowlist and remote/pseudo exclusions.
 Preserve symlink objects, numeric ownership, permissions, hard links, ACLs,
 xattrs and capabilities; retain mountpoint directories. A one-filesystem flag

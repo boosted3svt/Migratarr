@@ -20,21 +20,24 @@ writers; application names in earlier examples are not a survey whitelist or a
 signal that those applications are currently used. Remote mounted contents and
 explicitly excluded duplicate mounts remain outside the local copy scope.
 
-**Current milestone: standalone assessment and VM-only RAM recovery rehearsals.**
+**Current milestone: standalone assessment and experimental VM-only OS replacement.**
 Saved recovery jobs and a self-contained rescue image are implemented for
-disposable QEMU guests. Physical rescue installation, the migration engine,
-service shutdown, disk replacement and network cutover remain unimplemented.
+disposable QEMU guests. Physical rescue installation, production migration,
+general writer coordination and network cutover remain unqualified and disabled.
 The bounded [VM fixture transfer](docs/TRANSFER_LAB.md) tests copying onto the
 destination disk with metadata preservation and interruption recovery.
 The [failure-recovery extension](docs/TRANSFER_FAILURES_LAB.md) exercises lost
 connectivity, source changes during copying and destination space exhaustion.
 Draft plans also contain a [whole-system path policy](docs/ROOT_PATH_POLICY.md).
 Its VM-only cleanup prototype applies an exact, revalidated preview inside a
-bounded root-shaped sandbox; whole-root replacement and deletion remain disabled.
+bounded root-shaped sandbox; physical-host replacement and deletion remain disabled.
 The fixture transfer can also apply that policy during copying, retaining
 protected boot/recovery, network and identity paths before exact-preview cleanup.
+The [whole-OS lab](docs/WHOLE_OS_LAB.md) implements actual Ubuntu 20.04 source
+replacement of an Ubuntu 24.04 destination from RAM, including exact cleanup,
+separate root/boot copying and boot reconciliation for one guarded VM layout.
 Every assessment and recovery job returns `migration_ready: false`.
-No actual migration combination is qualified yet.
+No physical migration combination is qualified yet.
 
 ## Install on a fresh Ubuntu destination
 

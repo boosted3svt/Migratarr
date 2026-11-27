@@ -60,7 +60,7 @@ def build_vm_bundle(output, kernel, kernel_version, application, client_public_k
     copied_busybox = tree / busybox.lstrip("/")
     if copied_busybox != tree / "bin/busybox":
         shutil.copy2(copied_busybox, tree / "bin/busybox")
-    for applet in ("sh", "mount", "umount", "mkdir", "cat", "sleep", "sync", "insmod", "ip", "reboot", "poweroff", "awk"):
+    for applet in ("sh", "mount", "umount", "mkdir", "cat", "sleep", "sync", "insmod", "ip", "reboot", "poweroff", "awk", "chroot"):
         (tree / "bin" / applet).symlink_to("busybox")
     for binary in ("dropbear", "blkid", "grub-editenv", "ssh", "rsync"):
         executable = shutil.which(binary)

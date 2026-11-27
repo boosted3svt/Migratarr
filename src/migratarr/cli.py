@@ -70,6 +70,13 @@ def main(argv=None):
     transfer.add_argument("--vm-token", required=True)
     transfer.add_argument("--bwlimit", type=int, default=0, help="Fixture test rate limit in KiB/s; zero is unlimited")
     transfer.add_argument("--root-policy", action="store_true", help="Apply root policy inside the fixed policy-case fixture; requires a seeded sandbox")
+    for name in ('os-preview-vm', 'os-replace-vm', 'os-reconcile-vm'):
+        os_action = recovery_commands.add_parser(name, help="Offline disposable QEMU guests only: whole OS replacement rehearsal")
+        os_action.add_argument('--vm-token', required=True)
+        if name == 'os-preview-vm':
+            os_action.add_argument('--source-token', required=True)
+        else:
+            os_action.add_argument('--preview-sha256', required=True)
     for name in ("cleanup-preview-vm", "cleanup-apply-vm"):
         cleanup = recovery_commands.add_parser(name, help="Disposable VMs only: exact-preview cleanup inside the bounded policy sandbox")
         cleanup.add_argument("--vm-token", required=True)
@@ -135,6 +142,10 @@ def main(argv=None):
                 result = check_source(args.runtime_dir)
             elif args.recovery_command == "transfer-fixture":
                 result = transfer_fixture(args.vm_token, args.bwlimit, root_policy=args.root_policy)
+            elif args.recovery_command in ('os-preview-vm', 'os-replace-vm', 'os-reconcile-vm'):
+                from .os_replace import preview_os, replace_os, reconcile_os
+                action = reconcile_os if args.recovery_command == 'os-reconcile-vm' else replace_os
+                result = preview_os(args.vm_token, args.source_token) if args.recovery_command == 'os-preview-vm' else action(args.vm_token, args.preview_sha256)
             elif args.recovery_command == "cleanup-preview-vm":
                 result = preview_cleanup(args.vm_token)
             elif args.recovery_command == "cleanup-apply-vm":
